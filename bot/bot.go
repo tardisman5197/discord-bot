@@ -1,10 +1,15 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 // Bot handels all of the incoming messages for the bot
@@ -15,6 +20,8 @@ type Bot struct {
 	// implemented in the discordgo module
 	discordBot *discordgo.Session
 
+	mongoClient *mongo.Client
+
 	// discordServers stores a list of DiscordServers
 	// identified by the GuildID of the server
 	discordServers map[string]*DiscordServer
@@ -22,12 +29,15 @@ type Bot struct {
 	// token is the developer token provided by discord
 	// to allow the bot to connect to the discord API
 	token string
+
+	mongoURI string
 }
 
 // NewBot returns a pointer to a new instance of a Bot
-func NewBot(token string) *Bot {
+func NewBot(token, mongoURI string) *Bot {
 	return &Bot{
 		token:          token,
+		mongoURI:       mongoURI,
 		discordServers: make(map[string]*DiscordServer),
 	}
 }
@@ -47,6 +57,15 @@ func (b *Bot) Setup() error {
 	dg.AddHandler(b.handleMessage)
 
 	b.discordBot = dg
+
+	ctx, _ := context.WithTimeout(context.Background(), MongoConnectionTime*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(b.mongoURI))
+	if err != nil {
+		fmt.Println("Error connecting to Mongo Database,", err)
+		return err
+	}
+
+	b.mongoClient = client
 
 	return nil
 }
@@ -214,4 +233,32 @@ func (b *Bot) displayHelp() string {
 			The lists command displays all of the lists that are stored.
 			Example Usage: ~lists
 	`
+}
+
+// MonitorMongoConnection constantly pings the mongo database to ensure
+// the Bot is till connected.
+func (b *Bot) MonitorMongoConnection(ctx context.Context) chan error {
+	errChannel := make(chan error)
+
+	ticker := time.NewTicker(PingInterval * time.Second)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("CANCELING")
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				fmt.Println("Pinging")
+				pingCTX, _ := context.WithTimeout(context.Background(), MongoPingTime*time.Second)
+				err := b.mongoClient.Ping(pingCTX, readpref.Primary())
+				if err != nil {
+					errChannel <- err
+				}
+			}
+		}
+	}()
+
+	return errChannel
 }
