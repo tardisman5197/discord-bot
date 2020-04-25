@@ -37,7 +37,7 @@ A discord bot that does a bunch of things.
     *Note: Ensure that the mongo data directory has been created*
 
     *Note: On a Windows host a drive must be shared first on docker hub*
-    
+
 4. Run the containers
 
     ```bash
