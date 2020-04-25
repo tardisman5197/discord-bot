@@ -1,0 +1,31 @@
+version: '3'
+
+services: 
+    database:
+        container_name: database
+        environment:
+        - MONGO_ROOT_PASSWORD=password123
+        image: mongo:latest
+        networks: 
+        - backend
+        ports:
+        - '27017-27019'
+        restart: always
+        volumes:
+        - ${MONGO_DATA_PATH}:/data/db
+    
+    bot:
+        build:
+            context: ./
+            dockerfile: ./dockerfile
+        command: -t ${TOKEN}
+        container_name: bot
+        depends_on:
+        - database
+        networks: 
+        - backend
+        restart: on-failure
+
+networks:
+    backend:
+        driver: bridge
