@@ -17,7 +17,7 @@ func main() {
 
 	discordBot := bot.NewBot(token, mongoURI)
 
-	err := discordBot.Setup()
+	err := discordBot.Setup("dev", "servers")
 	if err != nil {
 		fmt.Printf("Error setting up bot - %v\n", err)
 	}

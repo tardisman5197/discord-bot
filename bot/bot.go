@@ -22,30 +22,27 @@ type Bot struct {
 
 	mongoClient *mongo.Client
 
-	// discordServers stores a list of DiscordServers
-	// identified by the GuildID of the server
-	discordServers map[string]*DiscordServer
-
 	// token is the developer token provided by discord
 	// to allow the bot to connect to the discord API
 	token string
 
 	mongoURI string
+
+	collection *mongo.Collection
 }
 
 // NewBot returns a pointer to a new instance of a Bot
 func NewBot(token, mongoURI string) *Bot {
 	return &Bot{
-		token:          token,
-		mongoURI:       mongoURI,
-		discordServers: make(map[string]*DiscordServer),
+		token:    token,
+		mongoURI: mongoURI,
 	}
 }
 
 // Setup creates a new session with the token set when the bot
 // was created. Setup returns an error if the Bot could not
 // connect to the discord API.
-func (b *Bot) Setup() error {
+func (b *Bot) Setup(databaseName, collectionName string) error {
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + b.token)
 	if err != nil {
@@ -66,6 +63,7 @@ func (b *Bot) Setup() error {
 	}
 
 	b.mongoClient = client
+	b.collection = b.mongoClient.Database(databaseName).Collection(collectionName)
 
 	return nil
 }
@@ -129,36 +127,27 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Remove the command keyword from the arg list
 	args = args[1:]
 
-	// Check to see if we have DiscordServer for the GuildID
-	if _, exists := b.discordServers[m.GuildID]; !exists {
-		// We do not have a server stored for this GuildID
-		// make a new one
-		b.discordServers[m.GuildID] = NewDiscordServer(m.GuildID)
-	}
-
-	server := b.discordServers[m.GuildID]
-
 	// Check command keyword against the known commands
 	// and run the correct server function
 	switch cmd {
 	case "add":
 		fmt.Println("Add Cmd")
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.add(args)))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.add(m.GuildID, args)))
 	case "remove":
 		fmt.Println("Remove Cmd")
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.removeItem(args)))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.removeItem(m.GuildID, args)))
 	case "removeList":
 		fmt.Println("Remove List Cmd")
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.removeList(args)))
-	case "pick":
-		fmt.Println("Pick Cmd")
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.pick(args)))
-	case "list":
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.getList(args)))
-		fmt.Println("List Cmd")
-	case "lists":
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", server.getLists()))
-		fmt.Println("Lists Cmd")
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.removeList(m.GuildID, args)))
+	// case "pick":
+	// 	fmt.Println("Pick Cmd")
+	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.pick(args)))
+	// case "list":
+	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getList(args)))
+	// 	fmt.Println("List Cmd")
+	// case "lists":
+	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getLists()))
+	// 	fmt.Println("Lists Cmd")
 	default:
 		fmt.Println("Help Cmd")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.displayHelp()))
