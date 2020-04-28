@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -123,40 +124,44 @@ func (b *Bot) removeList(guildID string, args []string) string {
 	// Check if the item was added
 	if result.ModifiedCount != 0 {
 		return fmt.Sprintf("Removed: %s\n", args[0])
-	} else {
-		return fmt.Sprintf("Error - %s was not found\n", args[0])
 	}
+
+	return fmt.Sprintf("Error - %s was not found\n", args[0])
 }
 
-// // pick chooses at random one item from a specified list.
-// // An optional argument can be provided which will remove
-// // the chosen item from the list. This function returns
-// // the text that the bot should send to the server.
-// func (b *Bot) pick(guildID string, args []string) string {
-// 	// Check there are enough arguments
-// 	if len(args) < 1 {
-// 		return "Pick Command Error - Incorrect number of arguments\n\nUsage: ~pick <list> [remove]"
-// 	}
+// pick chooses at random one item from a specified list.
+// An optional argument can be provided which will remove
+// the chosen item from the list. This function returns
+// the text that the bot should send to the server.
+func (b *Bot) pick(guildID string, args []string) string {
+	// Check there are enough arguments
+	if len(args) < 1 {
+		return "Pick Command Error - Incorrect number of arguments\n\nUsage: ~pick <list> [remove]"
+	}
 
-// 	// Check the specified list exists
-// 	if _, exists := ds.lists[args[0]]; !exists {
-// 		return fmt.Sprintf("Pick Command Error - Could not find list: %s", args[0])
-// 	}
+	// Get the list
+	var result bson.M
+	ctx := context.TODO()
+	err := b.collection.FindOne(ctx, bson.M{"guildID": guildID, "lists." + args[0]: bson.M{"$exists": true}}).Decode(&result)
+	if err != nil {
+		return fmt.Sprintf("Error finding list - %v", err)
+	}
 
-// 	// Get a random number between 0 and the length of the list.
-// 	// Then get the chosen item from the list.
-// 	chosenIndex := rand.Intn(len(ds.lists[args[0]]))
-// 	chosen := ds.lists[args[0]][chosenIndex]
+	items := result["lists"].(bson.M)[args[0]].(bson.A)
+	if len(items) == 0 {
+		return fmt.Sprintf("No items in %v", args[0])
+	}
 
-// 	// Check the remove argument has been provided
-// 	if len(args) >= 2 {
-// 		// Remove the chosen item from the list
-// 		ds.lists[args[0]] = RemoveIndex(ds.lists[args[0]], chosenIndex)
-// 		return fmt.Sprintf("Random item from list %s chosen and removed: %s", args[0], chosen)
-// 	}
+	chosen := items[rand.Intn(len(items))]
 
-// 	return fmt.Sprintf("Random item from list %s chosen: %s", args[0], chosen)
-// }
+	// Remove the item from the list
+	var removedStr string
+	if len(args) > 1 {
+		removedStr += fmt.Sprintf("\n%s", b.removeItem(guildID, []string{args[0], fmt.Sprintf("%v", chosen)}))
+	}
+
+	return fmt.Sprintf("Item chosen from %s: %v%s", args[0], chosen, removedStr)
+}
 
 // // getList returns the list of items in the specified list.
 // func (b *Bot) getList(guildID string, args []string) string {

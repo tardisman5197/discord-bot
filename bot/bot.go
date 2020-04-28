@@ -139,9 +139,9 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "removeList":
 		fmt.Println("Remove List Cmd")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.removeList(m.GuildID, args)))
-	// case "pick":
-	// 	fmt.Println("Pick Cmd")
-	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.pick(args)))
+	case "pick":
+		fmt.Println("Pick Cmd")
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.pick(m.GuildID, args)))
 	// case "list":
 	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getList(args)))
 	// 	fmt.Println("List Cmd")
