@@ -5,18 +5,18 @@ package bot
 type DiscordServer struct {
 	// guildID is the unique ID given to a discord
 	// server
-	guildID string
+	GuildID string `bson:"guildID"`
 
 	// lists stores a collection of items assigned
 	// to a list id.
-	lists map[string][]string
+	Lists map[string][]string `bson:"lists"`
 }
 
 // NewDiscordServer returns a pointer to a DiscordServer
 // instance.
 func NewDiscordServer(guildID string) *DiscordServer {
 	return &DiscordServer{
-		guildID: guildID,
-		lists:   make(map[string][]string, 0),
+		GuildID: guildID,
+		Lists:   make(map[string][]string, 0),
 	}
 }
