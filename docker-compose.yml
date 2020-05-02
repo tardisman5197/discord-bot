@@ -18,7 +18,7 @@ services:
         build:
             context: ./
             dockerfile: ./dockerfile
-        command: -t ${TOKEN} -m mongodb://database:27017
+        command: -t ${TOKEN} -m mongodb://database:27017 -d ${DATABASE_NAME}
         container_name: bot
         depends_on:
         - database

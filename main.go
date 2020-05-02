@@ -9,15 +9,16 @@ import (
 )
 
 func main() {
-	var token, mongoURI string
+	var token, mongoURI, databaseName string
 	flag.StringVar(&token, "t", "", "Bot Token")
 	flag.StringVar(&mongoURI, "m", "", "Mongo URI")
+	flag.StringVar(&databaseName, "d", "dev", "Database Name")
 
 	flag.Parse()
 
 	discordBot := bot.NewBot(token, mongoURI)
 
-	err := discordBot.Setup("dev", "servers")
+	err := discordBot.Setup(databaseName, "servers")
 	if err != nil {
 		fmt.Printf("Error setting up bot - %v\n", err)
 	}
