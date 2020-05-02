@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -29,8 +30,9 @@ func (b *Bot) add(guildID string, args []string) string {
 		// Create the item to be added to a list
 		itemBSON := bson.M{"$push": bson.M{"lists." + args[0]: item}}
 
+		ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
 		result, err := b.collection.UpdateOne(
-			context.TODO(),
+			ctx,
 			filter,
 			itemBSON,
 			options.Update().SetUpsert(true),
@@ -74,8 +76,9 @@ func (b *Bot) removeItem(guildID string, args []string) string {
 		// Create the item to be added to a list
 		itemBSON := bson.M{"$pull": bson.M{"lists." + args[0]: item}}
 
+		ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
 		result, err := b.collection.UpdateOne(
-			context.TODO(),
+			ctx,
 			filter,
 			itemBSON,
 		)
@@ -111,8 +114,9 @@ func (b *Bot) removeList(guildID string, args []string) string {
 	filter := bson.M{"guildID": guildID}
 	listBSON := bson.M{"$unset": bson.M{"lists." + args[0]: ""}}
 
+	ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
 	result, err := b.collection.UpdateOne(
-		context.TODO(),
+		ctx,
 		filter,
 		listBSON,
 	)
@@ -141,8 +145,12 @@ func (b *Bot) pick(guildID string, args []string) string {
 
 	// Get the list
 	var result bson.M
-	ctx := context.TODO()
-	err := b.collection.FindOne(ctx, bson.M{"guildID": guildID, "lists." + args[0]: bson.M{"$exists": true}}).Decode(&result)
+	ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
+	err := b.collection.FindOne(
+		ctx,
+		bson.M{"guildID": guildID, "lists." + args[0]: bson.M{"$exists": true}},
+	).Decode(&result)
+
 	if err != nil {
 		return fmt.Sprintf("Error finding list - %v", err)
 	}
@@ -163,47 +171,66 @@ func (b *Bot) pick(guildID string, args []string) string {
 	return fmt.Sprintf("Item chosen from %s: %v%s", args[0], chosen, removedStr)
 }
 
-// // getList returns the list of items in the specified list.
-// func (b *Bot) getList(guildID string, args []string) string {
-// 	// Check enough arguments were given
-// 	if len(args) < 1 {
-// 		return `
-// 		List Command Error - Incorrect number of arguments
+// getList returns the list of items in the specified list.
+func (b *Bot) getList(guildID string, args []string) string {
+	// Check enough arguments were given
+	if len(args) < 1 {
+		return `
+		List Command Error - Incorrect number of arguments
 
-// 		Usage: ~list <list>
-// 		`
-// 	}
+		Usage: ~list <list>
+		`
+	}
 
-// 	if _, exists := ds.lists[args[0]]; !exists {
-// 		return fmt.Sprintf("List Command Error - Could not find list: %s", args[0])
-// 	}
+	// Get the list
+	var result bson.M
+	ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
+	err := b.collection.FindOne(
+		ctx,
+		bson.M{"guildID": guildID, "lists." + args[0]: bson.M{"$exists": true}},
+	).Decode(&result)
 
-// 	result := fmt.Sprintf("List: %s\n", args[0])
+	if err != nil {
+		return fmt.Sprintf("Error finding list - %v", err)
+	}
 
-// 	if len(ds.lists[args[0]]) == 0 {
-// 		result += "\tNo Items"
-// 		return result
-// 	}
+	items := result["lists"].(bson.M)[args[0]].(bson.A)
 
-// 	for _, item := range ds.lists[args[0]] {
-// 		result += fmt.Sprintf("\t%s\n", item)
-// 	}
+	if len(items) == 0 {
+		return fmt.Sprintf("No items in %v", args[0])
+	}
+	resultStr := fmt.Sprintf("%v:\n", args[0])
 
-// 	return result
-// }
+	for _, item := range items {
+		resultStr += fmt.Sprintf("\t%v\n", item)
+	}
 
-// // getLists returns all of the list names stored by the server.
-// func (b *Bot) getLists(guildID string) string {
-// 	result := "Lists:\n"
+	return resultStr
+}
 
-// 	if len(ds.lists) == 0 {
-// 		result += "\tNo Lists"
-// 		return result
-// 	}
+// getLists returns all of the list names stored by the server.
+func (b *Bot) getLists(guildID string) string {
+	// Get the list
+	var result bson.M
+	ctx, _ := context.WithTimeout(context.Background(), MongoQueryTimeout*time.Second)
+	err := b.collection.FindOne(
+		ctx,
+		bson.M{"guildID": guildID},
+	).Decode(&result)
 
-// 	for list := range ds.lists {
-// 		result += fmt.Sprintf("\t%s\n", list)
-// 	}
+	if err != nil {
+		return fmt.Sprintf("Error finding lists - %v", err)
+	}
 
-// 	return result
-// }
+	lists := result["lists"].(bson.M)
+	if len(lists) == 0 {
+		return "No Lists"
+	}
+	resultStr := "Lists:\n"
+
+	for list := range lists {
+		resultStr += fmt.Sprintf("\t%v\n", list)
+	}
+
+	return resultStr
+}

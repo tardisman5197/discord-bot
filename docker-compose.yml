@@ -12,7 +12,7 @@ services:
         - '27017-27019'
         restart: always
         volumes:
-        - ${MONGO_DATA_PATH}:/data/db
+        - data:/data/db
     
     bot:
         build:
@@ -22,10 +22,13 @@ services:
         container_name: bot
         depends_on:
         - database
-        networks: 
+        networks:
         - backend
         restart: on-failure
 
 networks:
     backend:
         driver: bridge
+
+volumes:
+    data:

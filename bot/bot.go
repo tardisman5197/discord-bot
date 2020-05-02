@@ -142,12 +142,12 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "pick":
 		fmt.Println("Pick Cmd")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.pick(m.GuildID, args)))
-	// case "list":
-	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getList(args)))
-	// 	fmt.Println("List Cmd")
-	// case "lists":
-	// 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getLists()))
-	// 	fmt.Println("Lists Cmd")
+	case "list":
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getList(m.GuildID, args)))
+		fmt.Println("List Cmd")
+	case "lists":
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getLists(m.GuildID)))
+		fmt.Println("Lists Cmd")
 	default:
 		fmt.Println("Help Cmd")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.displayHelp()))
@@ -235,11 +235,9 @@ func (b *Bot) MonitorMongoConnection(ctx context.Context) chan error {
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("CANCELING")
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				fmt.Println("Pinging")
 				pingCTX, _ := context.WithTimeout(context.Background(), MongoPingTime*time.Second)
 				err := b.mongoClient.Ping(pingCTX, readpref.Primary())
 				if err != nil {
