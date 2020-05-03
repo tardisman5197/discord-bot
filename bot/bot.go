@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/bwmarrin/discordgo"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,15 +21,22 @@ type Bot struct {
 	// implemented in the discordgo module
 	discordBot *discordgo.Session
 
-	mongoClient *mongo.Client
-
 	// token is the developer token provided by discord
 	// to allow the bot to connect to the discord API
 	token string
 
+	// mongoClient is used to connect to the mongo database
+	mongoClient *mongo.Client
+
+	// mongoURI is the address of the mongo database which
+	// the bot stores its data in
 	mongoURI string
 
+	// collection stores a pointer to the mongo collection
+	// storing the discord servers data structures.
 	collection *mongo.Collection
+
+	logger *log.Entry
 }
 
 // NewBot returns a pointer to a new instance of a Bot
@@ -36,6 +44,9 @@ func NewBot(token, mongoURI string) *Bot {
 	return &Bot{
 		token:    token,
 		mongoURI: mongoURI,
+		logger: log.WithFields(log.Fields{
+			"package": "bot",
+		}),
 	}
 }
 
@@ -43,10 +54,12 @@ func NewBot(token, mongoURI string) *Bot {
 // was created. Setup returns an error if the Bot could not
 // connect to the discord API.
 func (b *Bot) Setup(databaseName, collectionName string) error {
+	b.logger.Debug("Setting up bot")
+
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + b.token)
 	if err != nil {
-		fmt.Println("Error creating Discord session,", err)
+		b.logger.WithError(err).Error("Error creating discord session")
 		return err
 	}
 
@@ -58,13 +71,14 @@ func (b *Bot) Setup(databaseName, collectionName string) error {
 	ctx, _ := context.WithTimeout(context.Background(), MongoConnectionTime*time.Second)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(b.mongoURI))
 	if err != nil {
-		fmt.Println("Error connecting to Mongo Database,", err)
+		b.logger.WithError(err).Error("Error connecting to Mongo Database")
 		return err
 	}
 
 	b.mongoClient = client
 	b.collection = b.mongoClient.Database(databaseName).Collection(collectionName)
 
+	b.logger.Debug("Bot setup complete")
 	return nil
 }
 
@@ -74,6 +88,8 @@ func (b *Bot) Setup(databaseName, collectionName string) error {
 // channel has a true placed in it once this function has
 // finished (when an error has occurred).
 func (b *Bot) Start() chan bool {
+	b.logger.Debug("Starting bot")
+
 	done := make(chan bool)
 
 	// Start listening in a new goroutine
@@ -81,11 +97,11 @@ func (b *Bot) Start() chan bool {
 		// Open a websocket connection to Discord and begin listening.
 		err := b.discordBot.Open()
 		if err != nil {
-			fmt.Println("Error opening connection,", err)
+			b.logger.WithError(err).Error("Error opening connection")
 			done <- true
 		}
 
-		fmt.Println("Bot Started")
+		b.logger.Info("Bot Started")
 	}()
 
 	return done
@@ -93,6 +109,7 @@ func (b *Bot) Start() chan bool {
 
 // Shutdown gracefully stops the discord websocket.
 func (b *Bot) Shutdown() {
+	b.logger.Debug("Shutting down bot")
 	b.discordBot.Close()
 }
 
@@ -108,6 +125,10 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	logger := b.logger.WithFields(log.Fields{
+		"guildID": m.GuildID,
+	})
+
 	// Split the message into cmd and arguments
 	// Expected message format: ~COMMAND ARG1 ARG2 ...
 	args := strings.Split(m.Content, " ")
@@ -118,6 +139,7 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// No command key word given
 	if len(cmd) <= 1 {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.displayHelp()))
+		logger.Debug("Invalid Command")
 		return
 	}
 
@@ -131,25 +153,25 @@ func (b *Bot) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// and run the correct server function
 	switch cmd {
 	case "add":
-		fmt.Println("Add Cmd")
+		logger.Debug("Add Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.add(m.GuildID, args)))
 	case "remove":
-		fmt.Println("Remove Cmd")
+		logger.Debug("Remove Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.removeItem(m.GuildID, args)))
 	case "removeList":
-		fmt.Println("Remove List Cmd")
+		logger.Debug("Remove List Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.removeList(m.GuildID, args)))
 	case "pick":
-		fmt.Println("Pick Cmd")
+		logger.Debug("Pick Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.pick(m.GuildID, args)))
 	case "list":
+		logger.Debug("List Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getList(m.GuildID, args)))
-		fmt.Println("List Cmd")
 	case "lists":
+		logger.Debug("Lists Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.getLists(m.GuildID)))
-		fmt.Println("Lists Cmd")
 	default:
-		fmt.Println("Help Cmd")
+		logger.Debug("Help Command")
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("```%s```", b.displayHelp()))
 	}
 	return
@@ -227,6 +249,8 @@ func (b *Bot) displayHelp() string {
 // MonitorMongoConnection constantly pings the mongo database to ensure
 // the Bot is till connected.
 func (b *Bot) MonitorMongoConnection(ctx context.Context) chan error {
+	b.logger.Debug("Starting Monitoring Mongo Connection")
+
 	errChannel := make(chan error)
 
 	ticker := time.NewTicker(PingInterval * time.Second)

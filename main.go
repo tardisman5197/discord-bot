@@ -3,12 +3,22 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
+	"os"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/text"
 	"github.com/tardisman5197/discord-bot/bot"
 )
 
 func main() {
+	log.SetHandler(text.New(os.Stderr))
+	log.SetLevel(log.DebugLevel)
+	logger := log.WithFields(log.Fields{
+		"package": "main",
+	})
+
+	logger.Info("Staring Discord Bot")
+
 	var token, mongoURI, databaseName string
 	flag.StringVar(&token, "t", "", "Bot Token")
 	flag.StringVar(&mongoURI, "m", "", "Mongo URI")
@@ -20,7 +30,7 @@ func main() {
 
 	err := discordBot.Setup(databaseName, "servers")
 	if err != nil {
-		fmt.Printf("Error setting up bot - %v\n", err)
+		logger.WithError(err).Error("Error Setting up Bot")
 	}
 
 	monitorCTX, monitorCancel := context.WithCancel(context.Background())
@@ -32,14 +42,16 @@ mainLoop:
 	for {
 		select {
 		case <-done:
-			fmt.Println("Bot Finished")
+			logger.Info("Bot Finished")
 			break mainLoop
 		case err := <-monitorError:
-			fmt.Printf("Error with mongo connection - %v\n", err)
+			logger.WithError(err).Error("Error with Mongo Connection")
 			break mainLoop
 		}
 	}
 
 	monitorCancel()
 	discordBot.Shutdown()
+
+	logger.Info("Discord Bot Stopped")
 }
